@@ -277,14 +277,11 @@
     async function fazerLogin() {
         const u = document.getElementById('user').value.toLowerCase().trim();
         const p = document.getElementById('pass').value.trim();
-
         const { data, error } = await _supabase.from('usuarios').select('*').eq('login', u).eq('senha', p).single();
-
         if (data) {
             usuarioLogado = data;
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-content').style.display = 'flex';
-            // Correção para reconhecer Admin mesmo que escrito Admin ou admin no banco
             if(data.nivel.toLowerCase() === 'admin') document.getElementById('btn-admin-users').style.display = 'block';
             showTab('tab-home');
         } else { 
@@ -311,26 +308,15 @@
         const nivel = document.getElementById('new-user-level').value;
         if(!login || !senha) return;
         const { error } = await _supabase.from('usuarios').insert([{ login, senha, nivel }]);
-        if(!error) { 
-            alert("Usuário criado!"); 
-            carregarUsuarios(); 
-            document.getElementById('new-user-login').value = "";
-            document.getElementById('new-user-pass').value = "";
-        }
+        if(!error) { alert("Usuário criado!"); carregarUsuarios(); document.getElementById('new-user-login').value = ""; document.getElementById('new-user-pass').value = ""; }
     }
 
     async function excluirUsuario(id, login) {
         if(login === usuarioLogado.login) return alert("Você não pode se excluir!");
-        if(confirm("Remover acesso de " + login + "?")) {
-            await _supabase.from('usuarios').delete().eq('id', id);
-            carregarUsuarios();
-        }
+        if(confirm("Remover acesso de " + login + "?")) { await _supabase.from('usuarios').delete().eq('id', id); carregarUsuarios(); }
     }
 
-    function abrirModalSair() {
-        if (caixaAberto) { alert("Feche o caixa antes de sair!"); return; }
-        abrirModal('modal-sair');
-    }
+    function abrirModalSair() { if (caixaAberto) { alert("Feche o caixa antes de sair!"); return; } abrirModal('modal-sair'); }
     function confirmarLogout() { window.location.reload(); }
 
     function confirmarAberturaCaixa() {
@@ -355,12 +341,8 @@
         const tipo = document.getElementById('c-tipo').value;
         if(!valor) return;
         const { error } = await _supabase.from('historico').insert([{
-            dinheiro: tipo === 'dinheiro' ? valor : 0,
-            pix: tipo === 'pix' ? valor : 0,
-            cartao: tipo === 'cartao' ? valor : 0,
-            totalvendas: valor,
-            data: new Date().toLocaleDateString('pt-BR'),
-            timestamp: Date.now()
+            dinheiro: tipo === 'dinheiro' ? valor : 0, pix: tipo === 'pix' ? valor : 0, cartao: tipo === 'cartao' ? valor : 0,
+            totalvendas: valor, data: new Date().toLocaleDateString('pt-BR'), timestamp: Date.now()
         }]);
         if(!error) {
             alert("Venda Sincronizada!");
@@ -369,47 +351,56 @@
         }
     }
 
-    async function solicitarFecharCaixa() {
-        if(!confirm("Encerrar turno e sair do caixa?")) return;
-        caixaAberto = false;
-        document.getElementById('caixa-on').style.display = 'none';
-        document.getElementById('caixa-off').style.display = 'block';
-        showTab('tab-home');
-    }
+    async function solicitarFecharCaixa() { if(!confirm("Encerrar turno e sair do caixa?")) return; caixaAberto = false; document.getElementById('caixa-on').style.display = 'none'; document.getElementById('caixa-off').style.display = 'block'; showTab('tab-home'); }
 
+    // NOVA FUNÇÃO DE HISTÓRICO COM LOG DE ERROS
     async function carregarHistorico() {
-        // Correção aqui: Selecionar o ID explicitamente para evitar erro 400 ao apagar
-        const { data, error } = await _supabase.from('historico').select('id, data, totalvendas, timestamp').order('timestamp', {ascending: false});
-        let m=0, t=0; const hoje = new Date();
-        const list = document.getElementById('lista-hist'); list.innerHTML = "";
-        if(data) {
-            data.forEach(h => {
-                const valorVenda = parseFloat(h.totalvendas) || 0;
-                t += valorVenda;
-                if(h.data && parseInt(h.data.split('/')[1]) === hoje.getMonth()+1) m += valorVenda;
-                list.innerHTML += `
-                    <div style="background:#111; margin-bottom:10px; border-radius:8px; border: 1px solid #222; padding:15px; display:flex; justify-content:space-between; align-items:center;">
-                        <div><span>Data: ${h.data || '---'}</span><br><strong style="color:var(--secondary)">R$ ${valorVenda.toFixed(2)}</strong></div>
-                        ${usuarioLogado.nivel === 'admin' ? `<button class="btn-danger" onclick="excluirVenda(${h.id})">APAGAR</button>` : ''}
-                    </div>`;
-            });
+        console.log("Iniciando busca do histórico...");
+        const { data, error } = await _supabase.from('historico').select('id, data, totalvendas, timestamp').order('timestamp', { ascending: false });
+
+        if (error) {
+            console.error("Erro Supabase:", error);
+            alert("Erro ao carregar dados do banco.");
+            return;
         }
+
+        const list = document.getElementById('lista-hist');
+        list.innerHTML = "";
+        
+        if (!data || data.length === 0) {
+            list.innerHTML = "<p style='text-align:center; opacity:0.5'>Nenhuma venda encontrada.</p>";
+            return;
+        }
+
+        let m = 0, t = 0;
+        const hoje = new Date();
+        const mesAtual = hoje.getMonth() + 1;
+
+        data.forEach(h => {
+            const valorVenda = parseFloat(h.totalvendas) || 0;
+            t += valorVenda;
+
+            if (h.data) {
+                const partes = h.data.split('/');
+                if (parseInt(partes[1]) === mesAtual) m += valorVenda;
+            }
+
+            list.innerHTML += `
+                <div style="background:#111; margin-bottom:10px; border-radius:8px; border: 1px solid #222; padding:15px; display:flex; justify-content:space-between; align-items:center;">
+                    <div><span>Data: ${h.data || '---'}</span><br><strong style="color:var(--secondary)">R$ ${valorVenda.toFixed(2)}</strong></div>
+                    ${usuarioLogado && usuarioLogado.nivel === 'admin' ? `<button class="btn-danger" onclick="excluirVenda(${h.id})">APAGAR</button>` : ''}
+                </div>`;
+        });
+
         document.getElementById('fat-mes').innerText = "R$ " + m.toFixed(2);
         document.getElementById('fat-total').innerText = "R$ " + t.toFixed(2);
     }
 
     async function excluirVenda(id) {
-        if(!id) {
-            alert("Não foi possível localizar o ID da venda.");
-            return;
-        }
+        if (!id) { alert("Erro: ID não identificado."); return; }
         if(confirm("Deseja apagar este registro permanentemente?")) {
             const { error } = await _supabase.from('historico').delete().eq('id', id);
-            if(!error) {
-                carregarHistorico();
-            } else {
-                alert("Erro ao excluir: " + error.message);
-            }
+            if (!error) carregarHistorico(); else alert("Erro ao excluir!");
         }
     }
 
