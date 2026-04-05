@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ice Village - Gestão Profissional</title>
+    <link rel="icon" type="image/png" href="icone.png?v=5">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { 
+            --primary: #6c5ce7; 
+            --secondary: #00b894; 
+            --danger: #ff4757; 
+            --panel-bg: rgba(10, 10, 10, 0.95); 
+        }
+
+        body { 
+            font-family: 'Inter', sans-serif; margin: 0; 
+            background: #000 url('logo.png') no-repeat center center fixed; 
+            background-size: cover; color: #fff; height: 100vh; display: flex; overflow: hidden; 
+        }
+        
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(10px); z-index: -1; }
+
+        #login-screen { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: url('logo.png') no-repeat center center; background-size: cover;
+            z-index: 20000; display: flex; justify-content: center; align-items: center; 
+        }
+        .login-box { 
+            background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(25px);
+            padding: 40px; border: 1px solid rgba(255,255,255,0.1); border-radius: 15px; 
+            width: 320px; text-align: center; box-shadow: 0 25px 50px rgba(0,0,0,0.8);
+        }
+        .login-box input { font-size: 16px !important; }
+
+        .modal-overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.9); display: none; justify-content: center; 
+            align-items: center; z-index: 30000; backdrop-filter: blur(5px);
+        }
+        .modal-box { 
+            background: #111; padding: 30px; border: 1px solid #333; 
+            border-radius: 12px; width: 90%; max-width: 350px; text-align: center; 
+        }
+
+        #app-content { display: none; width: 100%; height: 100vh; display: flex; }
+        
+        .mobile-header {
+            display: none; width: 100%; height: 60px; background: #000;
+            align-items: center; padding: 0 20px; border-bottom: 1px solid #222;
+            position: fixed; top: 0; left: 0; z-index: 10001;
+        }
+        .hamburger { cursor: pointer; display: flex; flex-direction: column; gap: 5px; }
+        .hamburger div { width: 25px; height: 3px; background: white; border-radius: 2px; }
+
+        .sidebar { 
+            width: 260px; background: #000; display: flex; flex-direction: column; 
+            border-right: 1px solid #222; flex-shrink: 0; transition: 0.3s; z-index: 10000;
+        }
+        .sidebar-header { background: white; padding: 15px; text-align: center; height: 60px; display: flex; justify-content: center; align-items: center; }
+        .sidebar-header img { max-height: 100%; }
+        
+        .menu-btn { 
+            width: 90%; padding: 12px 15px; margin: 5px auto; border: 1px solid #333; 
+            background: #111; color: white; cursor: pointer; text-align: left; 
+            border-radius: 4px; font-weight: 500; font-size: 14px;
+        }
+        .menu-btn:hover { border-color: var(--primary); background: #151515; }
+
+        .main-content { flex: 1; padding: 25px; overflow-y: auto; position: relative; }
+        .tab-content { display: none; background: var(--panel-bg); padding: 30px; border-radius: 8px; border: 1px solid #222; max-width: 1100px; margin: 0 auto; }
+        .active { display: block; }
+
+        .caixa-inputs { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        input, select, textarea { padding: 14px; background: #050505; border: 1px solid #333; color: white; border-radius: 5px; width: 100%; box-sizing: border-box; }
+        
+        #clock { font-size: 7rem; font-weight: 100; text-align: center; margin: 40px 0; letter-spacing: -2px; }
+
+        @media (max-width: 768px) {
+            #app-content { flex-direction: column; padding-top: 60px; }
+            .mobile-header { display: flex; justify-content: space-between; box-sizing: border-box; }
+            .sidebar { position: fixed; left: -260px; top: 60px; height: calc(100vh - 60px); width: 260px; }
+            .sidebar.open { left: 0; }
+            .sidebar-header { display: none; }
+            .main-content { padding: 15px; width: 100%; box-sizing: border-box; }
+            .tab-content { padding: 15px; border: none; width: 100%; }
+            #clock { font-size: 3.5rem; margin: 20px 0; }
+            .caixa-inputs { grid-template-columns: 1fr; gap: 10px; }
+            .login-box { width: 85%; padding: 30px 20px; }
+        }
+
+        .btn-action { background: var(--secondary); color: #000; border: none; padding: 16px; font-weight: bold; cursor: pointer; border-radius: 6px; width: 100%; font-size: 1.1rem; text-transform: uppercase; }
+        .btn-danger { background: var(--danger); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+        .troco-container { background: #111; padding: 20px; border-radius: 8px; border-left: 6px solid var(--secondary); margin-bottom: 25px; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #222; }
+    </style>
+</head>
+<body>
+
+    <div class="overlay"></div>
+
+    <div id="login-screen">
+        <div class="login-box">
+            <h2 style="color:var(--secondary); margin-bottom: 5px;">ICE VILLAGE</h2>
+            <p style="opacity: 0.5; font-size: 0.75rem; margin-bottom: 30px; letter-spacing: 2px;">PAINEL ADMINISTRATIVO</p>
+            <input type="text" id="user" placeholder="USUARIO" style="margin-bottom: 15px;">
+            <input type="password" id="pass" placeholder="SENHA" style="margin-bottom: 25px;">
+            <button class="btn-action" onclick="fazerLogin()">ENTRAR NO SISTEMA</button>
+        </div>
+    </div>
+
+    <div id="modal-abrir-caixa" class="modal-overlay">
+        <div class="modal-box">
+            <h3 style="margin-top: 0; color: var(--secondary);">ABRIR NOVO TURNO</h3>
+            <input type="number" id="input-valor-inicial" placeholder="R$ 0,00" style="text-align: center; font-size: 1.5rem; margin-bottom: 20px;">
+            <div style="display:flex; gap:10px;">
+                <button class="btn-action" style="background:#222; color:white;" onclick="fecharModal('modal-abrir-caixa')">CANCELAR</button>
+                <button class="btn-action" onclick="confirmarAberturaCaixa()">ABRIR CAIXA</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-sair" class="modal-overlay">
+        <div class="modal-box">
+            <h3 style="margin-top: 0;">Deseja sair?</h3>
+            <div style="display:flex; gap:10px; margin-top:25px;">
+                <button class="btn-action" style="background:#222; color:white;" onclick="fecharModal('modal-sair')">NAO</button>
+                <button class="btn-action" onclick="confirmarLogout()">SIM, SAIR</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-content">
+        <div class="mobile-header">
+            <div class="hamburger" onclick="toggleMenu()">
+                <div></div><div></div><div></div>
+            </div>
+            <span style="font-weight: bold; color: var(--secondary);">ICE VILLAGE</span>
+            <div style="width: 25px;"></div> 
+        </div>
+
+        <div class="sidebar">
+            <div class="sidebar-header"><img src="logo.png"></div>
+            <button class="menu-btn" onclick="showTab('tab-home')">INICIO</button>
+            <button class="menu-btn" onclick="showTab('tab-caixa')">CAIXA</button>
+            <button class="menu-btn" onclick="showTab('tab-historico')">HISTORICO</button>
+            <button class="menu-btn" onclick="showTab('tab-estoque')">ESTOQUE</button>
+            <button class="menu-btn" onclick="showTab('tab-precos')">PRECOS</button>
+            <button class="menu-btn" onclick="showTab('tab-notas')">ANOTACOES</button>
+            <button id="btn-admin-users" class="menu-btn" style="display:none;" onclick="showTab('tab-usuarios')">GERENCIAR ACESSOS</button>
+            <button class="menu-btn" style="color:var(--danger); margin-top:auto;" onclick="abrirModalSair()">SAIR DO PERFIL</button>
+        </div>
+
+        <div class="main-content">
+            <div id="tab-home" class="tab-content active" style="background:transparent; border:none;">
+                <p id="clock">00:00:00</p>
+                <p id="date" style="text-align:center; letter-spacing:5px; opacity:0.5; font-size: 1.2rem;"></p>
+            </div>
+
+            <div id="tab-caixa" class="tab-content">
+                <div id="caixa-off" style="text-align:center; padding:50px;">
+                    <h2 style="opacity:0.2;">CAIXA FECHADO</h2>
+                    <button class="btn-action" style="width:250px; margin-top: 20px;" onclick="abrirModal('modal-abrir-caixa')">ABRIR TURNO</button>
+                </div>
+
+                <div id="caixa-on" style="display:none;">
+                    <div class="caixa-header" style="display:flex; justify-content:space-between; margin-bottom:20px;">
+                        <h3 id="info-abertura" style="color:var(--secondary); margin:0;"></h3>
+                        <button class="btn-action" style="background:var(--danger); color:white; width:auto; padding: 10px 20px;" onclick="solicitarFecharCaixa()">FECHAR DIA</button>
+                    </div>
+                    <div class="caixa-inputs">
+                        <input type="text" id="c-desc" placeholder="PRODUTO">
+                        <input type="number" id="c-valor" placeholder="VALOR R$" oninput="calcTroco()">
+                        <input type="number" id="c-pago" placeholder="RECEBIDO R$" oninput="calcTroco()">
+                        <select id="c-tipo">
+                            <option value="dinheiro">DINHEIRO</option>
+                            <option value="pix">PIX</option>
+                            <option value="cartao">CARTAO</option>
+                        </select>
+                    </div>
+                    <div class="troco-container">
+                        <small>TROCO:</small><br>
+                        <strong id="troco-out" style="font-size:3rem; color:var(--secondary)">R$ 0,00</strong>
+                    </div>
+                    <button class="btn-action" onclick="salvarVendaRealTime()">FINALIZAR VENDA</button>
+                </div>
+            </div>
+
+            <div id="tab-historico" class="tab-content">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:30px;">
+                    <div style="background:#111; padding:20px; border-radius:10px; border: 1px solid #222;">
+                        <small>FATURAMENTO MES</small>
+                        <h2 id="fat-mes" style="color:var(--secondary); margin: 5px 0 0 0;">R$ 0,00</h2>
+                    </div>
+                    <div style="background:#111; padding:20px; border-radius:10px; border: 1px solid #222;">
+                        <small>TOTAL GERAL</small>
+                        <h2 id="fat-total" style="margin: 5px 0 0 0;">R$ 0,00</h2>
+                    </div>
+                </div>
+                <div id="lista-hist"></div>
+            </div>
+
+            <div id="tab-usuarios" class="tab-content">
+                <h3 style="color:var(--secondary)">GERENCIAR ACESSOS</h3>
+                <div style="background:#111; padding:20px; border-radius:8px; border:1px solid #333; margin-bottom:30px;">
+                    <p style="margin-top:0">CRIAR NOVO USUÁRIO</p>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
+                        <input type="text" id="new-user-login" placeholder="LOGIN">
+                        <input type="text" id="new-user-pass" placeholder="SENHA">
+                        <select id="new-user-level">
+                            <option value="comum">COMUM (FUNCIONARIO)</option>
+                            <option value="admin">ADMIN (DONA)</option>
+                        </select>
+                    </div>
+                    <button class="btn-action" style="margin-top:10px; padding:10px;" onclick="criarUsuario()">CADASTRAR USUÁRIO</button>
+                </div>
+                <div id="lista-usuarios-config"></div>
+            </div>
+
+            <div id="tab-estoque" class="tab-content">
+                <h3>ESTOQUE</h3>
+                <div style="display:flex; gap:10px; margin-bottom: 20px;">
+                    <input type="text" id="e-item" placeholder="PRODUTO">
+                    <input type="number" id="e-qtd" placeholder="QTD" style="width: 100px;">
+                    <button class="btn-action" style="width:60px" onclick="addEstoque()">+</button>
+                </div>
+                <table><thead><tr><th>ITEM</th><th>QTD</th><th>ACAO</th></tr></thead><tbody id="lista-estoque"></tbody></table>
+            </div>
+
+            <div id="tab-precos" class="tab-content">
+                <h3>PRECOS</h3>
+                <div style="display:flex; gap:10px; margin-bottom: 20px;">
+                    <input type="text" id="p-item" placeholder="ITEM">
+                    <input type="text" id="p-valor" placeholder="VALOR" style="width: 120px;">
+                    <button class="btn-action" style="width:60px" onclick="addPreco()">+</button>
+                </div>
+                <table><thead><tr><th>ITEM</th><th>VALOR</th><th>ACAO</th></tr></thead><tbody id="lista-precos"></tbody></table>
+            </div>
+
+            <div id="tab-notas" class="tab-content">
+                <h3>ANOTACOES</h3>
+                <textarea id="n-txt" rows="4" placeholder="Lembretes..."></textarea>
+                <button class="btn-action" onclick="addNota()" style="margin-top:10px">SALVAR</button>
+                <div id="lista-notas" style="margin-top:20px;"></div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const SUPABASE_URL = 'https://wqnossizykrtagydrbzy.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indxbm9zc2l6eWtydGFneWRyYnp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMzUwMTQsImV4cCI6MjA5MDgxMTAxNH0.KFyKVllsd5qQTvtg-uEqhFFdsvTyzhvEtcsOJHN6MUU';
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let caixaAberto = false;
+    let usuarioLogado = null;
+    let turnoData = { dinheiro: 0, pix: 0, cartao: 0, inicial: 0 };
+
+    function toggleMenu() { document.querySelector('.sidebar').classList.toggle('open'); }
+
+    function showTab(id) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        if(window.innerWidth <= 768) document.querySelector('.sidebar').classList.remove('open');
+        if(id === 'tab-historico') carregarHistorico();
+        if(id === 'tab-estoque') carregarBanco('estoque', 'lista-estoque');
+        if(id === 'tab-precos') carregarBanco('precos', 'lista-precos');
+        if(id === 'tab-notas') carregarBanco('notas', 'lista-notas');
+        if(id === 'tab-usuarios') carregarUsuarios();
+    }
+
+    function abrirModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function fecharModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    async function fazerLogin() {
+        const u = document.getElementById('user').value.toLowerCase().trim();
+        const p = document.getElementById('pass').value.trim();
+
+        const { data, error } = await _supabase.from('usuarios').select('*').eq('login', u).eq('senha', p).single();
+
+        if (data) {
+            usuarioLogado = data;
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('app-content').style.display = 'flex';
+            // Correção para reconhecer Admin mesmo que escrito Admin ou admin no banco
+            if(data.nivel.toLowerCase() === 'admin') document.getElementById('btn-admin-users').style.display = 'block';
+            showTab('tab-home');
+        } else { 
+            alert('Acesso Negado! Verifique login e senha.'); 
+        }
+    }
+
+    async function carregarUsuarios() {
+        const { data } = await _supabase.from('usuarios').select('*').order('id', {ascending: true});
+        const list = document.getElementById('lista-usuarios-config');
+        if(data) {
+            list.innerHTML = data.map(u => `
+                <div style="background:#0a0a0a; padding:15px; margin-bottom:10px; border:1px solid #222; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+                    <div><strong>${u.login.toUpperCase()}</strong> <small>(${u.nivel})</small><br><small style="opacity:0.6">Senha: ${u.senha}</small></div>
+                    <button class="btn-danger" style="padding:5px 10px; font-size:10px;" onclick="excluirUsuario(${u.id}, '${u.login}')">EXCLUIR</button>
+                </div>
+            `).join('');
+        }
+    }
+
+    async function criarUsuario() {
+        const login = document.getElementById('new-user-login').value.toLowerCase().trim();
+        const senha = document.getElementById('new-user-pass').value.trim();
+        const nivel = document.getElementById('new-user-level').value;
+        if(!login || !senha) return;
+        const { error } = await _supabase.from('usuarios').insert([{ login, senha, nivel }]);
+        if(!error) { 
+            alert("Usuário criado!"); 
+            carregarUsuarios(); 
+            document.getElementById('new-user-login').value = "";
+            document.getElementById('new-user-pass').value = "";
+        }
+    }
+
+    async function excluirUsuario(id, login) {
+        if(login === usuarioLogado.login) return alert("Você não pode se excluir!");
+        if(confirm("Remover acesso de " + login + "?")) {
+            await _supabase.from('usuarios').delete().eq('id', id);
+            carregarUsuarios();
+        }
+    }
+
+    function abrirModalSair() {
+        if (caixaAberto) { alert("Feche o caixa antes de sair!"); return; }
+        abrirModal('modal-sair');
+    }
+    function confirmarLogout() { window.location.reload(); }
+
+    function confirmarAberturaCaixa() {
+        const val = document.getElementById('input-valor-inicial').value;
+        if (!val || val < 0) { alert("Valor invalido!"); return; }
+        turnoData = { dinheiro: 0, pix: 0, cartao: 0, inicial: parseFloat(val) };
+        caixaAberto = true;
+        fecharModal('modal-abrir-caixa');
+        document.getElementById('caixa-off').style.display = 'none';
+        document.getElementById('caixa-on').style.display = 'block';
+        document.getElementById('info-abertura').innerText = "INICIAL: R$ " + turnoData.inicial.toFixed(2);
+    }
+
+    function calcTroco() {
+        const v = parseFloat(document.getElementById('c-valor').value) || 0;
+        const p = parseFloat(document.getElementById('c-pago').value) || 0;
+        document.getElementById('troco-out').innerText = "R$ " + (p - v > 0 ? (p - v).toFixed(2) : "0,00");
+    }
+
+    async function salvarVendaRealTime() {
+        const valor = parseFloat(document.getElementById('c-valor').value);
+        const tipo = document.getElementById('c-tipo').value;
+        if(!valor) return;
+        const { error } = await _supabase.from('historico').insert([{
+            dinheiro: tipo === 'dinheiro' ? valor : 0,
+            pix: tipo === 'pix' ? valor : 0,
+            cartao: tipo === 'cartao' ? valor : 0,
+            totalvendas: valor,
+            data: new Date().toLocaleDateString('pt-BR'),
+            timestamp: Date.now()
+        }]);
+        if(!error) {
+            alert("Venda Sincronizada!");
+            document.getElementById('c-valor').value = ""; document.getElementById('c-pago').value = "";
+            document.getElementById('c-desc').value = ""; document.getElementById('troco-out').innerText = "R$ 0,00";
+        }
+    }
+
+    async function solicitarFecharCaixa() {
+        if(!confirm("Encerrar turno e sair do caixa?")) return;
+        caixaAberto = false;
+        document.getElementById('caixa-on').style.display = 'none';
+        document.getElementById('caixa-off').style.display = 'block';
+        showTab('tab-home');
+    }
+
+    async function carregarHistorico() {
+        // Correção aqui: Selecionar o ID explicitamente para evitar erro 400 ao apagar
+        const { data, error } = await _supabase.from('historico').select('id, data, totalvendas, timestamp').order('timestamp', {ascending: false});
+        let m=0, t=0; const hoje = new Date();
+        const list = document.getElementById('lista-hist'); list.innerHTML = "";
+        if(data) {
+            data.forEach(h => {
+                const valorVenda = parseFloat(h.totalvendas) || 0;
+                t += valorVenda;
+                if(h.data && parseInt(h.data.split('/')[1]) === hoje.getMonth()+1) m += valorVenda;
+                list.innerHTML += `
+                    <div style="background:#111; margin-bottom:10px; border-radius:8px; border: 1px solid #222; padding:15px; display:flex; justify-content:space-between; align-items:center;">
+                        <div><span>Data: ${h.data || '---'}</span><br><strong style="color:var(--secondary)">R$ ${valorVenda.toFixed(2)}</strong></div>
+                        ${usuarioLogado.nivel === 'admin' ? `<button class="btn-danger" onclick="excluirVenda(${h.id})">APAGAR</button>` : ''}
+                    </div>`;
+            });
+        }
+        document.getElementById('fat-mes').innerText = "R$ " + m.toFixed(2);
+        document.getElementById('fat-total').innerText = "R$ " + t.toFixed(2);
+    }
+
+    async function excluirVenda(id) {
+        if(!id) {
+            alert("Não foi possível localizar o ID da venda.");
+            return;
+        }
+        if(confirm("Deseja apagar este registro permanentemente?")) {
+            const { error } = await _supabase.from('historico').delete().eq('id', id);
+            if(!error) {
+                carregarHistorico();
+            } else {
+                alert("Erro ao excluir: " + error.message);
+            }
+        }
+    }
+
+    async function carregarBanco(tab, elId) {
+        const { data } = await _supabase.from(tab).select('*').order('id', {ascending: false});
+        const lista = document.getElementById(elId);
+        if(tab === 'notas') {
+            lista.innerHTML = (data || []).map(i => `<div style="background:#111; padding:12px; border:1px solid #333; margin-bottom:8px; display:flex; justify-content:space-between;"><span>${i.texto}</span><button class="btn-danger" onclick="del('${tab}',${i.id},'${elId}')">X</button></div>`).join('');
+        } else {
+            lista.innerHTML = (data || []).map(i => `<tr><td>${i.item}</td><td>${tab==='precos'?'R$ '+i.valor:i.qtd}</td><td><button class="btn-danger" onclick="del('${tab}',${i.id},'${elId}')">X</button></td></tr>`).join('');
+        }
+    }
+
+    async function del(t,id,el){ if(confirm("Excluir?")){ await _supabase.from(t).delete().eq('id',id); carregarBanco(t,el); } }
+
+    async function addEstoque() { 
+        const item = document.getElementById('e-item').value, qtd = document.getElementById('e-qtd').value;
+        if(!item || !qtd) return;
+        await _supabase.from('estoque').insert([{ item, qtd: parseInt(qtd) }]); 
+        document.getElementById('e-item').value = ""; document.getElementById('e-qtd').value = "";
+        carregarBanco('estoque', 'lista-estoque');
+    }
+
+    async function addPreco() { 
+        const item = document.getElementById('p-item').value, valor = document.getElementById('p-valor').value;
+        if(!item || !valor) return;
+        await _supabase.from('precos').insert([{ item, valor }]); 
+        document.getElementById('p-item').value = ""; document.getElementById('p-valor').value = "";
+        carregarBanco('precos', 'lista-precos');
+    }
+
+    async function addNota() { 
+        const texto = document.getElementById('n-txt').value;
+        if(!texto) return;
+        await _supabase.from('notas').insert([{ texto }]); 
+        document.getElementById('n-txt').value = ""; carregarBanco('notas', 'lista-notas');
+    }
+
+    setInterval(() => {
+        const d = new Date();
+        document.getElementById('clock').innerText = d.toLocaleTimeString('pt-BR');
+        document.getElementById('date').innerText = d.toLocaleDateString('pt-BR', {weekday:'long', day:'numeric', month:'long'}).toUpperCase();
+    }, 1000);
+</script>
+</body>
+</html>
